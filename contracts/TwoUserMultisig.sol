@@ -25,10 +25,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
     modifier onlyBootloader() {
-        require(
-            msg.sender == BOOTLOADER_FORMAL_ADDRESS,
-            "Only bootloader can call this method"
-        );
+        require(msg.sender == BOOTLOADER_FORMAL_ADDRESS, "Only bootloader can call this method");
         // Continure execution if called from the bootloader.
         _;
     }
@@ -56,10 +53,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
             uint32(gasleft()),
             address(NONCE_HOLDER_SYSTEM_CONTRACT),
             0,
-            abi.encodeCall(
-                INonceHolder.incrementMinNonceIfEquals,
-                (_transaction.reserved[0])
-            )
+            abi.encodeCall(INonceHolder.incrementMinNonceIfEquals, (_transaction.reserved[0]))
         );
 
         bytes32 txHash;
@@ -72,10 +66,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
             txHash = _suggestedSignedHash;
         }
 
-        require(
-            isValidSignature(txHash, _transaction.signature) ==
-                EIP1271_SUCCESS_RETURN_VALUE
-        );
+        require(isValidSignature(txHash, _transaction.signature) == EIP1271_SUCCESS_RETURN_VALUE);
     }
 
     function executeTransaction(
@@ -102,35 +93,22 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         } else {
             bool success;
             assembly {
-                success := call(
-                    gas(),
-                    to,
-                    value,
-                    add(data, 0x20),
-                    mload(data),
-                    0,
-                    0
-                )
+                success := call(gas(), to, value, add(data, 0x20), mload(data), 0, 0)
             }
             require(success);
         }
     }
 
-    function executeTransactionFromOutside(Transaction calldata _transaction)
-        external
-        payable
-    {
+    function executeTransactionFromOutside(Transaction calldata _transaction) external payable {
         _validateTransaction(bytes32(0), _transaction);
 
         _executeTransaction(_transaction);
     }
 
-    function isValidSignature(bytes32 _hash, bytes calldata _signature)
-        public
-        view
-        override
-        returns (bytes4)
-    {
+    function isValidSignature(
+        bytes32 _hash,
+        bytes calldata _signature
+    ) public view override returns (bytes4) {
         // The signature is the concatenation of the ECDSA signatures of the owners
         // Each ECDSA signature is 65 bytes long. That means that the combined signature is 130 bytes long.
         require(_signature.length == 130, "Signature length is incorrect");
