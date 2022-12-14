@@ -14,32 +14,36 @@ import "@matterlabs/zksync-contracts/l2/system-contracts/Constants.sol";
 // to call non-view method of system contracts
 import "@matterlabs/zksync-contracts/l2/system-contracts/SystemContractsCaller.sol";
 
-contract TwoUserMultisig is IAccount, IERC1271 {
+contract AAWallet is IAccount, IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
 
     // state variables for account owners
-    address public owner1;
-    address public owner2;
+    address private secretKey;
+    address[] private guardians;
+    mapping(address => bool) private isGuardian;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
-    modifier onlyBootloader() {
-        require(msg.sender == BOOTLOADER_FORMAL_ADDRESS, "Only bootloader can call this method");
-        // Continure execution if called from the bootloader.
+    modifier onlyThisWallet() {
+        require(msg.sender == address(this), "Only this wallet itself can call this method");
         _;
     }
 
-    constructor(address _owner1, address _owner2) {
-        owner1 = _owner1;
-        owner2 = _owner2;
+    modifier onlyGuardian() {
+        require(isGuardian[msg.sender], "Only guardian can call this method");
+        _;
+    }
+
+    constructor(address _secretKey) {
+        secretKey = _secretKey;
     }
 
     function validateTransaction(
         bytes32,
         bytes32 _suggestedSignedHash,
         Transaction calldata _transaction
-    ) external payable override onlyBootloader {
+    ) external payable override onlyThisWallet {
         _validateTransaction(_suggestedSignedHash, _transaction);
     }
 
@@ -73,7 +77,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyBootloader {
+    ) external payable override onlyThisWallet {
         _executeTransaction(_transaction);
     }
 
@@ -109,15 +113,23 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         bytes32 _hash,
         bytes calldata _signature
     ) public view override returns (bytes4) {
-        // The signature is the concatenation of the ECDSA signatures of the owners
-        // Each ECDSA signature is 65 bytes long. That means that the combined signature is 130 bytes long.
-        require(_signature.length == 130, "Signature length is incorrect");
+        uint signatureLength = _signature.length;
+        require(
+            signatureLength >= 65 && signatureLength % 65 == 0,
+            "Signature length is incorrect"
+        );
 
-        address recoveredAddr1 = ECDSA.recover(_hash, _signature[0:65]);
-        address recoveredAddr2 = ECDSA.recover(_hash, _signature[65:130]);
+        if (signatureLength == 65) {
+            address recoveredAddr = ECDSA.recover(_hash, _signature);
+            require(recoveredAddr == secretKey, "Signature is incorrect");
+            return EIP1271_SUCCESS_RETURN_VALUE;
+        }
 
-        require(recoveredAddr1 == owner1);
-        require(recoveredAddr2 == owner2);
+        for (uint256 i = 0; i < signatureLength; i += 1) {
+            address curGuardianAddr = guardians[i];
+            address curRecoveredAddr = ECDSA.recover(_hash, _signature[i * 65:i * 65 + 65]);
+            require(curRecoveredAddr == curGuardianAddr, "Signature is incorrect");
+        }
 
         return EIP1271_SUCCESS_RETURN_VALUE;
     }
@@ -126,7 +138,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyBootloader {
+    ) external payable override onlyThisWallet {
         bool success = _transaction.payToTheBootloader();
         require(success, "Failed to pay the fee to the operator");
     }
@@ -135,7 +147,7 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyBootloader {
+    ) external payable override onlyThisWallet {
         _transaction.processPaymasterInput();
     }
 
@@ -145,4 +157,27 @@ contract TwoUserMultisig is IAccount, IERC1271 {
         // only interact through the `validateTransaction`/`executeTransaction` methods.
         assert(msg.sender != BOOTLOADER_FORMAL_ADDRESS);
     }
+
+    // GUARDIAN FUNCTIONS
+    // add guardian
+    // initiate remove guardian
+    // execute remove guardian
+    // cancel remove guardian
+    // -------------------------------------------------
+
+    // SOCIAL RECOVERY FUNCTIONS
+    // initiate social recovery
+    // support social recovery
+    // cancel social recovery
+    // execute social recovery
+    // -------------------------------------------------
+
+    // VAULT FUNCTIONS
+    // initiate withdraw
+    // cancel withdraw
+    // approve withdraw
+    // execute witdraw
+
+    // -------------------------------------------------
+    // GETTER FUNCTIONS
 }

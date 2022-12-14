@@ -8,8 +8,8 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 export default async function (hre: HardhatRuntimeEnvironment) {
     const wallet = new Wallet(PRIVATE_KEY)
     const deployer = new Deployer(hre, wallet)
-    const factoryArtifact = await deployer.loadArtifact("AAFactory")
-    const aaArtifact = await deployer.loadArtifact("TwoUserMultisig")
+    const factoryArtifact = await deployer.loadArtifact("WalletFactory")
+    const aaArtifact = await deployer.loadArtifact("AAWallet")
 
     // Deposit some funds to L2 in order to be able to perform L2 transactions.
     // You can remove the depositing step if the `wallet` has enough funds on zkSync
@@ -30,5 +30,5 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         aaArtifact.bytecode,
     ])
 
-    console.log(`AA factory address: ${factory.address}`)
+    console.log(`Wallet factory address: ${factory.address}`)
 }

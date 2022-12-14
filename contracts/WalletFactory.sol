@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "@matterlabs/zksync-contracts/l2/system-contracts/Constants.sol";
 import "@matterlabs/zksync-contracts/l2/system-contracts/SystemContractsCaller.sol";
 
-contract AAFactory {
+contract WalletFactory {
     bytes32 public aaBytecodeHash;
 
     constructor(bytes32 _aaBytecodeHash) {
@@ -13,8 +13,7 @@ contract AAFactory {
 
     function deployAccount(
         bytes32 salt,
-        address owner1,
-        address owner2
+        address secretKey
     ) external returns (address accountAddress) {
         bytes memory returnData = SystemContractsCaller.systemCall(
             uint32(gasleft()),
@@ -22,7 +21,7 @@ contract AAFactory {
             0,
             abi.encodeCall(
                 DEPLOYER_SYSTEM_CONTRACT.create2Account,
-                (salt, aaBytecodeHash, abi.encode(owner1, owner2))
+                (salt, aaBytecodeHash, abi.encode(secretKey))
             )
         );
 
