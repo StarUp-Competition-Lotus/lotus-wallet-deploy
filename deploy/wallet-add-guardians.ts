@@ -1,17 +1,50 @@
-import { utils, Wallet, Provider } from "zksync-web3"
+import { utils, Wallet, Provider, types, EIP712Signer } from "zksync-web3"
 import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
-const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS as string
+const WALLET_SECRET_KEY = process.env.WALLET_SECRET_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
-    const account = new Wallet(PRIVATE_KEY).connect(provider)
-    const walletArtifact = await hre.artifacts.readArtifact("WalletFactory")
+    const signingAccount = new Wallet(WALLET_SECRET_KEY).connect(provider)
+    const walletArtifact = await hre.artifacts.readArtifact("AAWallet")
 
-    const wallet = new ethers.Contract(FACTORY_ADDRESS, walletArtifact.abi, account)
+    const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi, signingAccount)
 
-    console.log(wallet)
+    let tx = await wallet.populateTransaction.addGuardian(
+        "0xb607A500574fE29afb0d0681f1dC3E82f79f4877"
+    )
+
+    let gasLimit = await provider.estimateGas(tx)
+    let gasPrice = await provider.getGasPrice()
+
+    tx = {
+        ...tx,
+        from: signingAccount.address,
+        gasLimit: gasLimit,
+        gasPrice: gasPrice,
+        chainId: (await provider.getNetwork()).chainId,
+        nonce: await provider.getTransactionCount(wallet.address),
+        type: 113,
+        customData: {
+            ergsPerPubdata: utils.DEFAULT_ERGS_PER_PUBDATA_LIMIT,
+        } as types.Eip712Meta,
+        value: ethers.BigNumber.from(0),
+    }
+    const signedTxHash = EIP712Signer.getSignedDigest(tx)
+
+    const signature = ethers.utils.concat([
+        // Note, that `signMessage` wouldn't work here, since we don't want
+        // the signed hash to be prefixed with `\x19Ethereum Signed Message:\n`
+        ethers.utils.joinSignature(signingAccount._signingKey().signDigest(signedTxHash)),
+    ])
+
+    tx.customData = {
+        ...tx.customData,
+        customSignature: signature,
+    }
+
+    const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
+    await addGuardianTx.wait()
 }

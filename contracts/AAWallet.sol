@@ -19,14 +19,15 @@ contract AAWallet is IAccount, IERC1271 {
     using TransactionHelper for Transaction;
 
     // state variables for account owners
-    address private secretKey;
+    bytes32 private signingKey;
+    address private signingAddress;
     address[] private guardians;
     mapping(address => bool) private isGuardian;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
-    modifier onlyThisWallet() {
-        require(msg.sender == address(this), "Only this wallet itself can call this method");
+    modifier onlyBootloader() {
+        require(msg.sender == BOOTLOADER_FORMAL_ADDRESS, "Only bootloader can call this method");
         _;
     }
 
@@ -35,15 +36,17 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
-    constructor(address _secretKey) {
-        secretKey = _secretKey;
+    constructor(bytes32 _signingKey, address _signingAddress) {
+        // should not pass secret as params for security reasons
+        signingKey = _signingKey;
+        signingAddress = _signingAddress;
     }
 
     function validateTransaction(
         bytes32,
         bytes32 _suggestedSignedHash,
         Transaction calldata _transaction
-    ) external payable override onlyThisWallet {
+    ) external payable override onlyBootloader {
         _validateTransaction(_suggestedSignedHash, _transaction);
     }
 
@@ -77,7 +80,7 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyThisWallet {
+    ) external payable override onlyBootloader {
         _executeTransaction(_transaction);
     }
 
@@ -121,7 +124,7 @@ contract AAWallet is IAccount, IERC1271 {
 
         if (signatureLength == 65) {
             address recoveredAddr = ECDSA.recover(_hash, _signature);
-            require(recoveredAddr == secretKey, "Signature is incorrect");
+            require(recoveredAddr == signingAddress, "Signature is incorrect");
             return EIP1271_SUCCESS_RETURN_VALUE;
         }
 
@@ -138,7 +141,7 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyThisWallet {
+    ) external payable override onlyBootloader {
         bool success = _transaction.payToTheBootloader();
         require(success, "Failed to pay the fee to the operator");
     }
@@ -147,7 +150,7 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32,
         bytes32,
         Transaction calldata _transaction
-    ) external payable override onlyThisWallet {
+    ) external payable override onlyBootloader {
         _transaction.processPaymasterInput();
     }
 
@@ -160,6 +163,15 @@ contract AAWallet is IAccount, IERC1271 {
 
     // GUARDIAN FUNCTIONS
     // add guardian
+    function addGuardian(address _guardian) external onlyBootloader {
+        require(
+            !isGuardian[_guardian] && _guardian != signingAddress && _guardian != address(this),
+            "Invalid Guardian Address"
+        );
+        guardians.push(_guardian);
+        isGuardian[_guardian] = true;
+    }
+
     // initiate remove guardian
     // execute remove guardian
     // cancel remove guardian
@@ -180,4 +192,12 @@ contract AAWallet is IAccount, IERC1271 {
 
     // -------------------------------------------------
     // GETTER FUNCTIONS
+
+    function getSecretKey() external view onlyBootloader returns (bytes32) {
+        return signingKey;
+    }
+
+    function getGuardians() external view onlyBootloader returns (address[] memory) {
+        return guardians;
+    }
 }
