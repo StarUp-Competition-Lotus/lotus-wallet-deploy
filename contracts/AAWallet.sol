@@ -19,9 +19,9 @@ contract AAWallet is IAccount, IERC1271 {
     using TransactionHelper for Transaction;
 
     // state variables for account owners
-    bytes32 private signingKey;
+    address private signingKey;
     address private signingAddress;
-    address[] private guardians;
+    address[] public guardians;
     mapping(address => bool) private isGuardian;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
@@ -31,12 +31,17 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
+    modifier onlyOwner() {
+        require(msg.sender == signingKey, "Only owner can call this method");
+        _;
+    }
+
     modifier onlyGuardian() {
         require(isGuardian[msg.sender], "Only guardian can call this method");
         _;
     }
 
-    constructor(bytes32 _signingKey, address _signingAddress) {
+    constructor(address _signingKey, address _signingAddress) {
         // should not pass secret as params for security reasons
         signingKey = _signingKey;
         signingAddress = _signingAddress;
@@ -163,7 +168,7 @@ contract AAWallet is IAccount, IERC1271 {
 
     // GUARDIAN FUNCTIONS
     // add guardian
-    function addGuardian(address _guardian) external onlyBootloader {
+    function addGuardian(address _guardian) external onlyOwner {
         require(
             !isGuardian[_guardian] && _guardian != signingAddress && _guardian != address(this),
             "Invalid Guardian Address"
@@ -193,11 +198,11 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
     // GETTER FUNCTIONS
 
-    function getSecretKey() external view onlyBootloader returns (bytes32) {
+    function getSecretKey() public onlyOwner returns (address) {
         return signingKey;
     }
 
-    function getGuardians() external view onlyBootloader returns (address[] memory) {
+    function getGuardians() public onlyOwner returns (address[] memory) {
         return guardians;
     }
 }

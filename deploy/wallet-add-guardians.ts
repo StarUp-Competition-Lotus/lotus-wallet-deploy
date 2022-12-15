@@ -47,4 +47,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
 
     const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
     await addGuardianTx.wait()
+
+    const guardiansAfterAdding = await wallet.getGuardians()
+    await guardiansAfterAdding.wait()
+    console.log("guardians: ", guardiansAfterAdding)
 }
