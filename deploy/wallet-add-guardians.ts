@@ -45,6 +45,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         customSignature: signature,
     }
 
+    console.log(tx)
+
     const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
     await addGuardianTx.wait()
 

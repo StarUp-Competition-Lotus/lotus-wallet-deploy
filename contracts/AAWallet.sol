@@ -19,7 +19,7 @@ contract AAWallet is IAccount, IERC1271 {
     using TransactionHelper for Transaction;
 
     // state variables for account owners
-    address private signingKey;
+    bytes32 private signingKey;
     address private signingAddress;
     address[] public guardians;
     mapping(address => bool) private isGuardian;
@@ -31,17 +31,17 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == signingKey, "Only owner can call this method");
-        _;
-    }
+    // modifier onlyOwner() {
+    //     require(msg.sender == signingKey, "Only owner can call this method");
+    //     _;
+    // }
 
     modifier onlyGuardian() {
         require(isGuardian[msg.sender], "Only guardian can call this method");
         _;
     }
 
-    constructor(address _signingKey, address _signingAddress) {
+    constructor(bytes32 _signingKey, address _signingAddress) {
         // should not pass secret as params for security reasons
         signingKey = _signingKey;
         signingAddress = _signingAddress;
@@ -121,23 +121,28 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32 _hash,
         bytes calldata _signature
     ) public view override returns (bytes4) {
-        uint signatureLength = _signature.length;
-        require(
-            signatureLength >= 65 && signatureLength % 65 == 0,
-            "Signature length is incorrect"
-        );
+        // uint signatureLength = _signature.length;
+        // require(
+        //     signatureLength >= 65 && signatureLength % 65 == 0,
+        //     "Signature length is incorrect"
+        // );
 
-        if (signatureLength == 65) {
-            address recoveredAddr = ECDSA.recover(_hash, _signature);
-            require(recoveredAddr == signingAddress, "Signature is incorrect");
-            return EIP1271_SUCCESS_RETURN_VALUE;
-        }
+        // if (signatureLength == 65) {
+        //     address recoveredAddr = ECDSA.recover(_hash, _signature);
+        //     require(recoveredAddr == signingAddress, "Signature is incorrect");
+        //     return EIP1271_SUCCESS_RETURN_VALUE;
+        // }
 
-        for (uint256 i = 0; i < signatureLength; i += 1) {
-            address curGuardianAddr = guardians[i];
-            address curRecoveredAddr = ECDSA.recover(_hash, _signature[i * 65:i * 65 + 65]);
-            require(curRecoveredAddr == curGuardianAddr, "Signature is incorrect");
-        }
+        // for (uint256 i = 0; i < signatureLength; i += 1) {
+        //     address curGuardianAddr = guardians[i];
+        //     address curRecoveredAddr = ECDSA.recover(_hash, _signature[i * 65:i * 65 + 65]);
+        //     require(curRecoveredAddr == curGuardianAddr, "Signature is incorrect");
+        // }
+
+        require(_signature.length == 65, "Incorect Length");
+
+        address RecoveredAddr = ECDSA.recover(_hash, _signature[0:65]);
+        require(RecoveredAddr == signingAddress, "Signature is incorrect");
 
         return EIP1271_SUCCESS_RETURN_VALUE;
     }
@@ -198,11 +203,11 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
     // GETTER FUNCTIONS
 
-    function getSigningKey() public view onlyOwner returns (address) {
+    function getSigningKey() public view onlyBootloader returns (bytes32) {
         return signingKey;
     }
 
-    function getGuardians() public view onlyOwner returns (address[] memory) {
+    function getGuardians() public view onlyBootloader returns (address[] memory) {
         return guardians;
     }
 }
