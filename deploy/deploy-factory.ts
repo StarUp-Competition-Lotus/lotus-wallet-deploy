@@ -3,6 +3,9 @@ import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy"
 
+import { writeFile, writeFileSync } from 'fs';
+import { join } from 'path';
+
 const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
@@ -29,6 +32,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         // we should pass it here as well.
         aaArtifact.bytecode,
     ])
+
+    writeFileSync(join(__dirname, '..', '.env'), `FACTORY_ADDRESS="${factory.address}"\n`, { flag: 'a+' });
 
     console.log(`Wallet factory address: ${factory.address}`)
 }

@@ -2,6 +2,9 @@ import { utils, Wallet, Provider } from "zksync-web3"
 import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
+import { writeFileSync } from 'fs';
+import { join } from 'path'
+
 const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS as string
 const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 
@@ -40,6 +43,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
             value: ethers.utils.parseEther("0.002"),
         })
     ).wait()
+
+    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"`, { flag: 'a+' }, );
 
     const balance = await provider.getBalance(walletAddress)
     console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")
