@@ -7,13 +7,13 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
-    const wallet = new Wallet(PRIVATE_KEY).connect(provider)
+    const userAccount = new Wallet(PRIVATE_KEY).connect(provider)
     const factoryArtifact = await hre.artifacts.readArtifact("WalletFactory")
 
-    const walletFactory = new ethers.Contract(FACTORY_ADDRESS, factoryArtifact.abi, wallet)
+    const walletFactory = new ethers.Contract(FACTORY_ADDRESS, factoryArtifact.abi, userAccount)
 
-    const account = Wallet.createRandom()
-    const { privateKey: signingKey, address: signingAddress } = account
+    const signingAccount = Wallet.createRandom()
+    const { privateKey: signingKey, address: signingAddress } = signingAccount
     console.log("signingAddress :", signingAddress)
     console.log("signingKey :", signingKey)
 
@@ -31,4 +31,16 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         abiCoder.encode(["bytes32", "address"], [signingKey, signingAddress])
     )
     console.log(`Wallet deployed on address ${walletAddress}`)
+
+    console.log("Add fund to the wallet...")
+
+    await (
+        await userAccount.sendTransaction({
+            to: walletAddress,
+            value: ethers.utils.parseEther("0.002"),
+        })
+    ).wait()
+
+    const balance = await provider.getBalance(walletAddress)
+    console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")
 }

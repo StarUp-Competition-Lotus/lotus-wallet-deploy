@@ -31,13 +31,18 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
-    // modifier onlyOwner() {
-    //     require(msg.sender == signingKey, "Only owner can call this method");
-    //     _;
-    // }
-
     modifier onlyGuardian() {
         require(isGuardian[msg.sender], "Only guardian can call this method");
+        _;
+    }
+
+    modifier ownerOrWallet() {
+        require(
+            msg.sender == BOOTLOADER_FORMAL_ADDRESS ||
+                msg.sender == signingAddress ||
+                msg.sender == address(this),
+            "Only guardian or bootloader can call this method"
+        );
         _;
     }
 
@@ -173,7 +178,7 @@ contract AAWallet is IAccount, IERC1271 {
 
     // GUARDIAN FUNCTIONS
     // add guardian
-    function addGuardian(address _guardian) external onlyBootloader {
+    function addGuardian(address _guardian) external ownerOrWallet {
         require(
             !isGuardian[_guardian] && _guardian != signingAddress && _guardian != address(this),
             "Invalid Guardian Address"
@@ -203,11 +208,11 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
     // GETTER FUNCTIONS
 
-    function getSigningKey() public view onlyBootloader returns (bytes32) {
+    function getSigningKey() public view ownerOrWallet returns (bytes32) {
         return signingKey;
     }
 
-    function getGuardians() public view onlyBootloader returns (address[] memory) {
+    function getGuardians() public view ownerOrWallet returns (address[] memory) {
         return guardians;
     }
 }
