@@ -12,9 +12,10 @@ export default async function (hre: HardhatRuntimeEnvironment) {
 
     const walletFactory = new ethers.Contract(FACTORY_ADDRESS, factoryArtifact.abi, wallet)
 
-    const { privateKey: signingKey, address: signingAddress } = Wallet.createRandom()
-    console.log('signingAddress :', signingAddress);
-    console.log('signingKey :', signingKey);
+    const account = Wallet.createRandom()
+    const { privateKey: signingKey, address: signingAddress } = account
+    console.log("signingAddress :", signingAddress)
+    console.log("signingKey :", signingKey)
 
     const salt = ethers.constants.HashZero
 

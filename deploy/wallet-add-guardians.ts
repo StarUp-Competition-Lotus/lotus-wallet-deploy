@@ -3,14 +3,14 @@ import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
-const WALLET_SECRET_KEY = process.env.WALLET_SECRET_KEY as string
+const WALLET_SIGNING_KEY = process.env.WALLET_SIGNING_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
-    const signingAccount = new Wallet(WALLET_SECRET_KEY).connect(provider)
+    const signingAccount = new Wallet(WALLET_SIGNING_KEY).connect(provider)
     const walletArtifact = await hre.artifacts.readArtifact("AAWallet")
 
-    const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi, signingAccount)
+    const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi)
 
     let tx = await wallet.populateTransaction.addGuardian(
         "0xb607A500574fE29afb0d0681f1dC3E82f79f4877"
@@ -21,7 +21,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
 
     tx = {
         ...tx,
-        from: signingAccount.address,
+        from: wallet.address,
         gasLimit: gasLimit,
         gasPrice: gasPrice,
         chainId: (await provider.getNetwork()).chainId,
@@ -48,7 +48,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
     await addGuardianTx.wait()
 
-    const guardiansAfterAdding = await wallet.getGuardians()
-    await guardiansAfterAdding.wait()
-    console.log("guardians: ", guardiansAfterAdding)
+    // const guardiansAfterAdding = await wallet.getGuardians()
+    // await guardiansAfterAdding.wait()
+    // console.log("guardians: ", guardiansAfterAdding)
 }

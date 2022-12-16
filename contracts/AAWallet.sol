@@ -168,7 +168,7 @@ contract AAWallet is IAccount, IERC1271 {
 
     // GUARDIAN FUNCTIONS
     // add guardian
-    function addGuardian(address _guardian) external onlyOwner {
+    function addGuardian(address _guardian) external onlyBootloader {
         require(
             !isGuardian[_guardian] && _guardian != signingAddress && _guardian != address(this),
             "Invalid Guardian Address"
@@ -198,11 +198,11 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
     // GETTER FUNCTIONS
 
-    function getSecretKey() public onlyOwner returns (address) {
+    function getSigningKey() public view onlyOwner returns (address) {
         return signingKey;
     }
 
-    function getGuardians() public onlyOwner returns (address[] memory) {
+    function getGuardians() public view onlyOwner returns (address[] memory) {
         return guardians;
     }
 }
