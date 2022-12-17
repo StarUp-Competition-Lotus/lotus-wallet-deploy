@@ -2,32 +2,50 @@ import { utils, Wallet, Provider } from "zksync-web3"
 import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
-// Put the address of your AA factory
+import { writeFileSync } from 'fs';
+import { join } from 'path'
+
 const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS as string
 const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
-    const wallet = new Wallet(PRIVATE_KEY).connect(provider)
+    const userAccount = new Wallet(PRIVATE_KEY).connect(provider)
     const factoryArtifact = await hre.artifacts.readArtifact("WalletFactory")
 
-    const walletFactory = new ethers.Contract(FACTORY_ADDRESS, factoryArtifact.abi, wallet)
+    const walletFactory = new ethers.Contract(FACTORY_ADDRESS, factoryArtifact.abi, userAccount)
 
-    const secretKey = Wallet.createRandom()
+    const signingAccount = Wallet.createRandom()
+    const { privateKey: signingKey, address: signingAddress } = signingAccount
+    console.log("signingAddress :", signingAddress)
+    console.log("signingKey :", signingKey)
 
-    // For the simplicity of the tutorial, we will use zero hash as salt
     const salt = ethers.constants.HashZero
 
-    const tx = await walletFactory.deployAccount(salt, secretKey.address)
+    const tx = await walletFactory.deployAccount(salt, signingKey, signingAddress)
     await tx.wait()
 
     // Getting the address of the deployed contract
     const abiCoder = new ethers.utils.AbiCoder()
-    const multisigAddress = utils.create2Address(
+    const walletAddress = utils.create2Address(
         FACTORY_ADDRESS,
         await walletFactory.aaBytecodeHash(),
         salt,
-        abiCoder.encode(["address"], [secretKey.address])
+        abiCoder.encode(["bytes32", "address"], [signingKey, signingAddress])
     )
-    console.log(`Multisig deployed on address ${multisigAddress}`)
+    console.log(`Wallet deployed on address ${walletAddress}`)
+
+    console.log("Add fund to the wallet...")
+
+    await (
+        await userAccount.sendTransaction({
+            to: walletAddress,
+            value: ethers.utils.parseEther("0.002"),
+        })
+    ).wait()
+
+    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"`, { flag: 'a+' }, );
+
+    const balance = await provider.getBalance(walletAddress)
+    console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")
 }
