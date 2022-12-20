@@ -18,12 +18,34 @@ contract AAWallet is IAccount, IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
 
+    // STRUCTS
+    struct WithdrawRequest {
+        address receiver;
+        uint256 amount;
+        uint256 approvalsCount;
+    }
+
+    // EVENTS
+    // event GuardianAdded(address guardian);
+    // event GuardianRemoved(address guardian);
+    // event WithdrawRequestCreated(address receiver, uint256 amount);
+    // event WithdrawRequestApproved(address guardian);
+    // event WithdrawRequestExecuted(address receiver, uint256 amount);
+    // event WithdrawRequestCanceled(address receiver, uint256 amount);
+
     // state variables for account owners
     bytes32 private signingKey;
     address private signingAddress;
 
-    address[] public guardians;
+    // variables for guardians
+    address[] private guardians;
     mapping(address => bool) private isGuardian;
+
+    // variables for withdraw requests
+    mapping(uint256 => WithdrawRequest) private withdrawRequests;
+    uint256 private withdrawRequestsCount;
+    mapping(uint256 => bool) activeWithdrawRequestsIndexes;
+    mapping(uint256 => mapping(address => bool)) private withdrawApprovals;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
@@ -52,6 +74,8 @@ contract AAWallet is IAccount, IERC1271 {
         signingKey = _signingKey;
         signingAddress = _signingAddress;
     }
+
+    // AA FUNCTIONS
 
     function validateTransaction(
         bytes32,
@@ -177,6 +201,8 @@ contract AAWallet is IAccount, IERC1271 {
         assert(msg.sender != BOOTLOADER_FORMAL_ADDRESS);
     }
 
+    // -------------------------------------------------
+
     // GUARDIAN FUNCTIONS
 
     function addGuardian(address _guardian) external ownerOrWallet {
@@ -190,9 +216,11 @@ contract AAWallet is IAccount, IERC1271 {
 
     function removeGuardian(uint256 index) external ownerOrWallet {
         require(index < guardians.length);
-        delete (isGuardian[guardians[index]]);
-        delete (guardians[index]);
+        for (uint256 i = index; i < guardians.length; i++) {
+            guardians[i] = guardians[i + 1];
+        }
         guardians.pop();
+        delete (guardians[index]);
     }
 
     // -------------------------------------------------
@@ -205,10 +233,42 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
 
     // VAULT FUNCTIONS
-    // initiate withdraw
-    // cancel withdraw
-    // approve withdraw
-    // execute witdraw
+
+    function createWithdrawRequest(uint256 _amount, address _receiver) external ownerOrWallet {
+        require(_amount > 0 && _amount <= address(this).balance, "Invalid Amount");
+        WithdrawRequest storage newRequest = withdrawRequests[withdrawRequestsCount];
+        newRequest.amount = _amount;
+        newRequest.receiver = _receiver;
+        activeWithdrawRequestsIndexes[withdrawRequestsCount] = true;
+        withdrawRequestsCount++;
+    }
+
+    function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
+        require(index < withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
+        delete (withdrawRequests[index]);
+        activeWithdrawRequestsIndexes[index] = false;
+    }
+
+    function executeWithdrawRequest(uint256 index) external ownerOrWallet {
+        require(index <= withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
+        WithdrawRequest storage request = withdrawRequests[index];
+        require(request.amount <= address(this).balance, "Insufficient Balance");
+        require(request.approvalsCount >= guardians.length, "Not enough approvals");
+        (bool success, ) = payable(request.receiver).call{value: request.amount}("");
+        require(success, "Transfer failed");
+        activeWithdrawRequestsIndexes[index] = false;
+    }
+
+    function approveWithdrawRequest(uint256 index) external {
+        require(
+            index <= withdrawRequestsCount &&
+                activeWithdrawRequestsIndexes[index] &&
+                !withdrawApprovals[index][msg.sender]
+        );
+        WithdrawRequest storage request = withdrawRequests[index];
+        withdrawApprovals[index][msg.sender] = true;
+        request.approvalsCount++;
+    }
 
     // -------------------------------------------------
     // GETTER FUNCTIONS
@@ -229,8 +289,13 @@ contract AAWallet is IAccount, IERC1271 {
         for (uint256 i = 0; i < guardians.length; i++) {
             if (guardians[i] != address(0)) {
                 result[index] = guardians[i];
+                index++;
             }
         }
         return result;
+    }
+
+    function getWithdrawRequestsCount() public view ownerOrWallet returns (uint256) {
+        return withdrawRequestsCount;
     }
 }
