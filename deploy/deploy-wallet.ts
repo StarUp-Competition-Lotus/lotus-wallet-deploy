@@ -22,7 +22,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
 
     const salt = ethers.constants.HashZero
 
-    const tx = await walletFactory.deployAccount(salt, signingKey, signingAddress)
+    const tx = await walletFactory.deployAccount(salt, signingAddress)
     await tx.wait()
 
     // Getting the address of the deployed contract
@@ -31,7 +31,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         FACTORY_ADDRESS,
         await walletFactory.aaBytecodeHash(),
         salt,
-        abiCoder.encode(["bytes32", "address"], [signingKey, signingAddress])
+        abiCoder.encode(["address"], [signingAddress])
     )
     console.log(`Wallet deployed on address ${walletAddress}`)
 
@@ -44,7 +44,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         })
     ).wait()
 
-    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"`, { flag: 'a+' }, );
+    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"\nWALLET_SIGNING_ADDRESS="${signingAddress}"`, { flag: 'a+' }, );
 
     const balance = await provider.getBalance(walletAddress)
     console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")
