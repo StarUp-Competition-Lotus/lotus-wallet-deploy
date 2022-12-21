@@ -20,6 +20,7 @@ contract AAWallet is IAccount, IERC1271 {
 
     // state variables for account owners
     address private signingAddress;
+
     address[] public guardians;
     
     mapping(address => bool) private isGuardian;
@@ -195,7 +196,7 @@ contract AAWallet is IAccount, IERC1271 {
     }
 
     // GUARDIAN FUNCTIONS
-    // add guardian
+
     function addGuardian(address _guardian) external ownerOrWallet {
         require(
             !isGuardian[_guardian] && _guardian != signingAddress && _guardian != address(this),
@@ -205,9 +206,13 @@ contract AAWallet is IAccount, IERC1271 {
         isGuardian[_guardian] = true;
     }
 
-    // initiate remove guardian
-    // execute remove guardian
-    // cancel remove guardian
+    function removeGuardian(uint256 index) external ownerOrWallet {
+        require(index < guardians.length);
+        delete (isGuardian[guardians[index]]);
+        delete (guardians[index]);
+        guardians.pop();
+    }
+
     // -------------------------------------------------
 
     // SOCIAL RECOVERY FUNCTIONS
@@ -265,6 +270,19 @@ contract AAWallet is IAccount, IERC1271 {
     }
 
     function getGuardians() public view ownerOrWallet returns (address[] memory) {
-        return guardians;
+        uint256 zeroAddressCount;
+        for (uint256 i = 0; i < guardians.length; i++) {
+            if (guardians[i] == address(0)) {
+                zeroAddressCount++;
+            }
+        }
+        uint256 index = 0;
+        address[] memory result = new address[](guardians.length - zeroAddressCount);
+        for (uint256 i = 0; i < guardians.length; i++) {
+            if (guardians[i] != address(0)) {
+                result[index] = guardians[i];
+            }
+        }
+        return result;
     }
 }

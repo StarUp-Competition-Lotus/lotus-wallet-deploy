@@ -1,38 +1,35 @@
 import { utils, Wallet, Provider, types, EIP712Signer } from "zksync-web3"
 import * as ethers from "ethers"
-import { HardhatRuntimeEnvironment } from "hardhat/types"
-
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
 const WALLET_SIGNING_KEY = process.env.WALLET_SIGNING_KEY as string
 
-export default async function (hre: HardhatRuntimeEnvironment) {
-    const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
+export const executeAAWalletTransaction = async (
+    tx: ethers.ethers.PopulatedTransaction,
+    provider: Provider
+) => {
     const signingAccount = new Wallet(WALLET_SIGNING_KEY).connect(provider)
-    const walletArtifact = await hre.artifacts.readArtifact("AAWallet")
 
-    const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi, signingAccount)
-
-    let tx = await wallet.populateTransaction.addGuardian(
-        "0xF45C57838e90c0fcA202b7aC652E3680496619e2"
-    )
-
-    let gasLimit = await provider.estimateGas(tx)
+    let gasLimit
+    try {
+        gasLimit = await provider.estimateGas(tx)
+    } catch {
+        gasLimit = ethers.BigNumber.from("500000000")
+    }
     let gasPrice = await provider.getGasPrice()
 
     tx = {
         ...tx,
-        from: wallet.address,
+        from: WALLET_ADDRESS,
         gasLimit: gasLimit,
         gasPrice: gasPrice,
         chainId: (await provider.getNetwork()).chainId,
-        nonce: await provider.getTransactionCount(wallet.address),
+        nonce: await provider.getTransactionCount(WALLET_ADDRESS),
         type: 113,
         customData: {
             ergsPerPubdata: utils.DEFAULT_ERGS_PER_PUBDATA_LIMIT,
         } as types.Eip712Meta,
         value: ethers.BigNumber.from(0),
     }
-
     const signedTxHash = EIP712Signer.getSignedDigest(tx)
 
     const signature = ethers.utils.concat([
@@ -46,9 +43,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         customSignature: signature,
     }
 
-    const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
-    await addGuardianTx.wait()
-
-    const guardiansAfterAdding = await wallet.getGuardians()
-    console.log("Guardians: ", guardiansAfterAdding)
+    const executeTx = await provider.sendTransaction(utils.serialize(tx))
+    await executeTx.wait()
 }

@@ -15,7 +15,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     await (
         await userAccount.sendTransaction({
             to: wallet.address,
-            value: ethers.utils.parseEther("0.002"),
+            value: ethers.utils.parseEther("0.003"),
         })
     ).wait()
 
