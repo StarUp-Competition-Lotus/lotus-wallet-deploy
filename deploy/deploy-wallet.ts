@@ -35,7 +35,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     )
     console.log(`Wallet deployed on address ${walletAddress}`)
 
-    console.log("Add fund to the wallet...")
+    console.log("Adding fund to the wallet...")
 
     await (
         await userAccount.sendTransaction({

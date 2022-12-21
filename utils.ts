@@ -1,13 +1,13 @@
 import { utils, Wallet, Provider, types, EIP712Signer } from "zksync-web3"
 import * as ethers from "ethers"
-const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
-const WALLET_SIGNING_KEY = process.env.WALLET_SIGNING_KEY as string
 
 export const executeAAWalletTransaction = async (
+    walletAddress: string,
+    walletSigningKey: string,
     tx: ethers.ethers.PopulatedTransaction,
     provider: Provider
 ) => {
-    const signingAccount = new Wallet(WALLET_SIGNING_KEY).connect(provider)
+    const signingAccount = new Wallet(walletSigningKey).connect(provider)
 
     let gasLimit
     try {
@@ -19,11 +19,11 @@ export const executeAAWalletTransaction = async (
 
     tx = {
         ...tx,
-        from: WALLET_ADDRESS,
+        from: walletAddress,
         gasLimit: gasLimit,
         gasPrice: gasPrice,
         chainId: (await provider.getNetwork()).chainId,
-        nonce: await provider.getTransactionCount(WALLET_ADDRESS),
+        nonce: await provider.getTransactionCount(walletAddress),
         type: 113,
         customData: {
             ergsPerPubdata: utils.DEFAULT_ERGS_PER_PUBDATA_LIMIT,
@@ -44,5 +44,11 @@ export const executeAAWalletTransaction = async (
     }
 
     const executeTx = await provider.sendTransaction(utils.serialize(tx))
-    await executeTx.wait()
+    await executeTx.wait(6)
+}
+
+export const getBalance = async (address: string, provider: Provider): Promise<number> => {
+    const balance = await provider.getBalance(address)
+    const formattedBalance = parseFloat(ethers.utils.formatEther(balance.toString()))
+    return formattedBalance
 }

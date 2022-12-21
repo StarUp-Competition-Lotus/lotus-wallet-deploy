@@ -24,10 +24,10 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     }
 
     console.log("adding guardian...")
-    await executeAAWalletTransaction(addGuardianTx, provider)
+    await executeAAWalletTransaction(WALLET_ADDRESS, WALLET_SIGNING_KEY, addGuardianTx, provider)
     await showGuardians()
 
     console.log("removing guardian...")
-    await executeAAWalletTransaction(removeGuardianTx, provider)
+    await executeAAWalletTransaction(WALLET_ADDRESS, WALLET_SIGNING_KEY, removeGuardianTx, provider)
     await showGuardians()
 }
