@@ -2,26 +2,35 @@ import { utils, Wallet, Provider, types, EIP712Signer } from "zksync-web3"
 import * as ethers from "ethers"
 import { HardhatRuntimeEnvironment } from "hardhat/types"
 
+import { writeFileSync } from 'fs';
+import { join } from 'path'
+
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
-const WALLET_SIGNING_KEY = process.env.WALLET_SIGNING_KEY as string
+const GUARDIAN_WALLET_ADDRESS = process.env.GUARDIAN_WALLET_ADDRESS as string
+const GUARDIAN_SIGNING_KEY = process.env.GUARDIAN_SIGNING_KEY as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
-    const signingAccount = new Wallet(WALLET_SIGNING_KEY).connect(provider)
+    const signingAccount = new Wallet(GUARDIAN_SIGNING_KEY).connect(provider)
     const walletArtifact = await hre.artifacts.readArtifact("AAWallet")
 
-    const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi, signingAccount)
+    const wallet = new ethers.Contract(GUARDIAN_WALLET_ADDRESS, walletArtifact.abi, signingAccount)
 
-    let tx = await wallet.populateTransaction.addGuardian(
-        "0xF45C57838e90c0fcA202b7aC652E3680496619e2"
+    let tx = await wallet.populateTransaction.supportRecovery(
+        "<GUARDIAN_WALLET_PUBLIC_KEY>"
     )
+
+    tx = {
+        ...tx,
+        from: GUARDIAN_WALLET_ADDRESS,
+        to: WALLET_ADDRESS
+    }
 
     let gasLimit = await provider.estimateGas(tx)
     let gasPrice = await provider.getGasPrice()
 
     tx = {
         ...tx,
-        from: wallet.address,
         gasLimit: gasLimit,
         gasPrice: gasPrice,
         chainId: (await provider.getNetwork()).chainId,
@@ -46,9 +55,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         customSignature: signature,
     }
 
-    const addGuardianTx = await provider.sendTransaction(utils.serialize(tx))
-    await addGuardianTx.wait()
-
-    const guardiansAfterAdding = await wallet.getGuardians()
-    console.log("Guardians: ", guardiansAfterAdding)
+    const supportRecoveryTx = await provider.sendTransaction(utils.serialize(tx))
+    await supportRecoveryTx.wait()
 }

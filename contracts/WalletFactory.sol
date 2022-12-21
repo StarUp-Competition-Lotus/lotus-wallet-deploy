@@ -13,7 +13,6 @@ contract WalletFactory {
 
     function deployAccount(
         bytes32 salt,
-        bytes32 signingKey,
         address signingAddress
     ) external returns (address accountAddress) {
         bytes memory returnData = SystemContractsCaller.systemCall(
@@ -22,7 +21,7 @@ contract WalletFactory {
             0,
             abi.encodeCall(
                 DEPLOYER_SYSTEM_CONTRACT.create2Account,
-                (salt, aaBytecodeHash, abi.encode(signingKey, signingAddress))
+                (salt, aaBytecodeHash, abi.encode(signingAddress))
             )
         );
 

@@ -19,10 +19,19 @@ contract AAWallet is IAccount, IERC1271 {
     using TransactionHelper for Transaction;
 
     // state variables for account owners
-    bytes32 private signingKey;
     address private signingAddress;
     address[] public guardians;
+    
     mapping(address => bool) private isGuardian;
+
+    bool private inRecovery;
+    uint256 private recoveryCycle;
+    struct Recovery {
+        address newSigningAddress;
+        uint256 revoveryRound;
+        bool isRecoveryExecuted;
+    }
+    mapping(address => Recovery) private guardianToRecovery;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
@@ -46,9 +55,18 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
-    constructor(bytes32 _signingKey, address _signingAddress) {
+    modifier notInRecovery() {
+        require(!inRecovery, "The wallet must not be in recovery mode");
+        _;
+    }
+
+    modifier onlyInRecovery() {
+        require(inRecovery, "The wallet must be in recovery mode");
+        _;
+    }
+
+    constructor(address _signingAddress) {
         // should not pass secret as params for security reasons
-        signingKey = _signingKey;
         signingAddress = _signingAddress;
     }
 
@@ -194,10 +212,45 @@ contract AAWallet is IAccount, IERC1271 {
 
     // SOCIAL RECOVERY FUNCTIONS
     // initiate social recovery
-    // support social recovery
-    // cancel social recovery
-    // execute social recovery
-    // -------------------------------------------------
+    function initiateRecovery(address _newSigningAddress) onlyGuardian notInRecovery external {
+        // we are entering a new recovery round
+        recoveryCycle++;
+        guardianToRecovery[msg.sender] = Recovery(
+            _newSigningAddress,
+            recoveryCycle, 
+            false
+        );
+        inRecovery = true;
+    }
+
+    function supportRecovery(address _newSigningAddress) onlyGuardian onlyInRecovery external {
+        guardianToRecovery[msg.sender] = Recovery(
+            _newSigningAddress,
+            recoveryCycle, 
+            false
+        );
+    }
+
+    function cancelRecovery() ownerOrWallet onlyInRecovery external {
+        inRecovery = false;
+    }
+
+    function executeRecovery(address _newSigningAddress) onlyGuardian onlyInRecovery external {
+        for (uint i = 0; i < guardians.length; i++) {
+            // cache recovery struct in memory
+            Recovery memory recovery = guardianToRecovery[guardians[i]];
+
+            require(recovery.revoveryRound == recoveryCycle, "round mismatch");
+            require(recovery.newSigningAddress == _newSigningAddress, "disagreement on new owner");
+            require(!recovery.isRecoveryExecuted, "duplicate guardian used in recovery");
+
+            // set field to true in storage, not memory
+            guardianToRecovery[guardians[i]].isRecoveryExecuted = true;
+        }
+
+        inRecovery = false;
+        signingAddress = _newSigningAddress;
+    }
 
     // VAULT FUNCTIONS
     // initiate withdraw
@@ -207,9 +260,8 @@ contract AAWallet is IAccount, IERC1271 {
 
     // -------------------------------------------------
     // GETTER FUNCTIONS
-
-    function getSigningKey() public view ownerOrWallet returns (bytes32) {
-        return signingKey;
+    function getSigningAddress() public view ownerOrWallet returns (address) {
+        return signingAddress;
     }
 
     function getGuardians() public view ownerOrWallet returns (address[] memory) {
