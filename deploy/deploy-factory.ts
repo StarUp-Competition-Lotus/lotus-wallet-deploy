@@ -14,16 +14,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const factoryArtifact = await deployer.loadArtifact("WalletFactory")
     const aaArtifact = await deployer.loadArtifact("AAWallet")
 
-    // Deposit some funds to L2 in order to be able to perform L2 transactions.
-    // You can remove the depositing step if the `wallet` has enough funds on zkSync
-    // const depositAmount = ethers.utils.parseEther("0.001")
-    // const depositHandle = await deployer.zkWallet.deposit({
-    //     to: deployer.zkWallet.address,
-    //     token: utils.ETH_ADDRESS,
-    //     amount: depositAmount,
-    // })
-    // await depositHandle.wait()
-
     // Getting the bytecodeHash of the account
     const bytecodeHash = utils.hashBytecode(aaArtifact.bytecode)
 

@@ -18,13 +18,6 @@ contract AAWallet is IAccount, IERC1271 {
     // to get transaction hash
     using TransactionHelper for Transaction;
 
-    // STRUCTS
-    struct WithdrawRequest {
-        address receiver;
-        uint256 amount;
-        uint256 approvalsCount;
-    }
-
     // EVENTS
     // event GuardianAdded(address guardian);
     // event GuardianRemoved(address guardian);
@@ -46,11 +39,16 @@ contract AAWallet is IAccount, IERC1271 {
         bool isRecoveryExecuted;
     }
     mapping(address => Recovery) private guardianToRecovery;
+    
     // variables for withdraw requests
+    struct WithdrawRequest {
+        address receiver;
+        uint256 amount;
+        mapping(address => bool) approvals;
+        bool isActive;
+    }
     mapping(uint256 => WithdrawRequest) private withdrawRequests;
     uint256 private withdrawRequestsCount;
-    mapping(uint256 => bool) activeWithdrawRequestsIndexes;
-    mapping(uint256 => mapping(address => bool)) private withdrawApprovals;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
@@ -284,39 +282,39 @@ contract AAWallet is IAccount, IERC1271 {
     // VAULT FUNCTIONS
 
     function createWithdrawRequest(uint256 _amount, address _receiver) external ownerOrWallet {
+        require(_receiver != address(this), "Should not send money to the wallet itself");
         require(_amount > 0 && _amount <= address(this).balance, "Invalid Amount");
         WithdrawRequest storage newRequest = withdrawRequests[withdrawRequestsCount];
-        newRequest.amount = _amount;
         newRequest.receiver = _receiver;
-        activeWithdrawRequestsIndexes[withdrawRequestsCount] = true;
+        newRequest.amount = _amount;
+        newRequest.isActive = true;
         withdrawRequestsCount++;
     }
 
     function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index < withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
-        delete (withdrawRequests[index]);
-        activeWithdrawRequestsIndexes[index] = false;
+        require(index <= withdrawRequestsCount  && withdrawRequests[index].isActive);
+        withdrawRequests[index].isActive = false;
     }
 
     function executeWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index <= withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
+        require(index <= withdrawRequestsCount && withdrawRequests[index].isActive);
         WithdrawRequest storage request = withdrawRequests[index];
         require(request.amount <= address(this).balance, "Insufficient Balance");
-        require(request.approvalsCount >= guardians.length, "Not enough approvals");
+        for (uint256 i = 0; i < guardians.length; i++) {
+            require(request.approvals[guardians[i]], "Need all guardians' approvals");
+        }
         (bool success, ) = payable(request.receiver).call{value: request.amount}("");
         require(success, "Transfer failed");
-        activeWithdrawRequestsIndexes[index] = false;
+        request.isActive = false;
     }
 
     function approveWithdrawRequest(uint256 index) external {
         require(
             index <= withdrawRequestsCount &&
-                activeWithdrawRequestsIndexes[index] &&
-                !withdrawApprovals[index][msg.sender]
+                withdrawRequests[index].isActive &&
+                !withdrawRequests[index].approvals[msg.sender]
         );
-        WithdrawRequest storage request = withdrawRequests[index];
-        withdrawApprovals[index][msg.sender] = true;
-        request.approvalsCount++;
+        withdrawRequests[index].approvals[msg.sender] = true;
     }
 
     // -------------------------------------------------
