@@ -26,29 +26,32 @@ contract AAWallet is IAccount, IERC1271 {
     // event WithdrawRequestExecuted(address receiver, uint256 amount);
     // event WithdrawRequestCanceled(address receiver, uint256 amount);
 
-    // state variables for account owners
-    address private signingAddress;
+    // VARIABLES
 
+    // main variables
+    address private signingAddress;
     address[] public guardians;
     mapping(address => bool) private isGuardian;
-    bool private inRecovery;
-    uint256 private recoveryCycle;
+
+    // social recovery variables
     struct Recovery {
         address newSigningAddress;
-        uint256 revoveryRound;
-        bool isRecoveryExecuted;
+        mapping(address => bool) approvals;
     }
-    mapping(address => Recovery) private guardianToRecovery;
-    
-    // variables for withdraw requests
+    bool private inRecovery;
+    uint256 private recoveryCycle;
+    mapping(uint256 => Recovery) private recoveryRounds;
+
+    // withdraw requests variables
     struct WithdrawRequest {
         address receiver;
         uint256 amount;
-        mapping(address => bool) approvals;
-        bool isActive;
+        uint256 approvalsCount;
     }
     mapping(uint256 => WithdrawRequest) private withdrawRequests;
     uint256 private withdrawRequestsCount;
+    mapping(uint256 => bool) activeWithdrawRequestsIndexes;
+    mapping(uint256 => mapping(address => bool)) private withdrawApprovals;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
 
@@ -163,23 +166,6 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32 _hash,
         bytes calldata _signature
     ) public view override returns (bytes4) {
-        // uint signatureLength = _signature.length;
-        // require(
-        //     signatureLength >= 65 && signatureLength % 65 == 0,
-        //     "Signature length is incorrect"
-        // );
-
-        // if (signatureLength == 65) {
-        //     address recoveredAddr = ECDSA.recover(_hash, _signature);
-        //     require(recoveredAddr == signingAddress, "Signature is incorrect");
-        //     return EIP1271_SUCCESS_RETURN_VALUE;
-        // }
-
-        // for (uint256 i = 0; i < signatureLength; i += 1) {
-        //     address curGuardianAddr = guardians[i];
-        //     address curRecoveredAddr = ECDSA.recover(_hash, _signature[i * 65:i * 65 + 65]);
-        //     require(curRecoveredAddr == curGuardianAddr, "Signature is incorrect");
-        // }
 
         require(_signature.length == 65, "Incorect Length");
 
@@ -240,81 +226,72 @@ contract AAWallet is IAccount, IERC1271 {
     // SOCIAL RECOVERY FUNCTIONS
     // initiate social recovery
     function initiateRecovery(address _newSigningAddress) onlyGuardian notInRecovery external {
-        // we are entering a new recovery round
         recoveryCycle++;
-        guardianToRecovery[msg.sender] = Recovery(
-            _newSigningAddress,
-            recoveryCycle, 
-            false
-        );
+        Recovery storage newRocovery = recoveryRounds[recoveryCycle];
+        newRocovery.newSigningAddress = _newSigningAddress;
+        newRocovery.approvals[msg.sender] = true;
         inRecovery = true;
     }
 
-    function supportRecovery(address _newSigningAddress) onlyGuardian onlyInRecovery external {
-        guardianToRecovery[msg.sender] = Recovery(
-            _newSigningAddress,
-            recoveryCycle, 
-            false
-        );
+    function supportRecovery() external onlyGuardian onlyInRecovery {
+        Recovery storage recovery = recoveryRounds[recoveryCycle];
+        require(!recovery.approvals[msg.sender], "duplicate guardian used in recovery");
+        recovery.approvals[msg.sender] = true;
     }
 
-    function cancelRecovery() ownerOrWallet onlyInRecovery external {
+    function cancelRecovery() external ownerOrWallet onlyInRecovery {
+        // delete recoveryRounds[recoveryCycle];
         inRecovery = false;
     }
 
-    function executeRecovery(address _newSigningAddress) onlyGuardian onlyInRecovery external {
+    function executeRecovery() external onlyGuardian onlyInRecovery {
         for (uint i = 0; i < guardians.length; i++) {
             // cache recovery struct in memory
-            Recovery memory recovery = guardianToRecovery[guardians[i]];
-
-            require(recovery.revoveryRound == recoveryCycle, "round mismatch");
-            require(recovery.newSigningAddress == _newSigningAddress, "disagreement on new owner");
-            require(!recovery.isRecoveryExecuted, "duplicate guardian used in recovery");
-
-            // set field to true in storage, not memory
-            guardianToRecovery[guardians[i]].isRecoveryExecuted = true;
+            Recovery storage recovery = recoveryRounds[recoveryCycle];
+            require(recovery.approvals[guardians[i]], "all guardians must support recovery");
         }
 
         inRecovery = false;
-        signingAddress = _newSigningAddress;
+        signingAddress = recoveryRounds[recoveryCycle].newSigningAddress;
+        // delete recoveryRounds[recoveryCycle];
     }
 
     // VAULT FUNCTIONS
 
     function createWithdrawRequest(uint256 _amount, address _receiver) external ownerOrWallet {
-        require(_receiver != address(this), "Should not send money to the wallet itself");
         require(_amount > 0 && _amount <= address(this).balance, "Invalid Amount");
         WithdrawRequest storage newRequest = withdrawRequests[withdrawRequestsCount];
-        newRequest.receiver = _receiver;
         newRequest.amount = _amount;
-        newRequest.isActive = true;
+        newRequest.receiver = _receiver;
+        activeWithdrawRequestsIndexes[withdrawRequestsCount] = true;
         withdrawRequestsCount++;
     }
 
     function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index <= withdrawRequestsCount  && withdrawRequests[index].isActive);
-        withdrawRequests[index].isActive = false;
+        require(index < withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
+        delete (withdrawRequests[index]);
+        activeWithdrawRequestsIndexes[index] = false;
     }
 
     function executeWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index <= withdrawRequestsCount && withdrawRequests[index].isActive);
+        require(index <= withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
         WithdrawRequest storage request = withdrawRequests[index];
         require(request.amount <= address(this).balance, "Insufficient Balance");
-        for (uint256 i = 0; i < guardians.length; i++) {
-            require(request.approvals[guardians[i]], "Need all guardians' approvals");
-        }
+        require(request.approvalsCount >= guardians.length, "Not enough approvals");
         (bool success, ) = payable(request.receiver).call{value: request.amount}("");
         require(success, "Transfer failed");
-        request.isActive = false;
+        activeWithdrawRequestsIndexes[index] = false;
     }
 
-    function approveWithdrawRequest(uint256 index) external {
+    function approveWithdrawRequest(uint256 index) external onlyGuardian {
         require(
             index <= withdrawRequestsCount &&
-                withdrawRequests[index].isActive &&
-                !withdrawRequests[index].approvals[msg.sender]
+                activeWithdrawRequestsIndexes[index] &&
+                !withdrawApprovals[index][msg.sender]
         );
-        withdrawRequests[index].approvals[msg.sender] = true;
+        WithdrawRequest storage request = withdrawRequests[index];
+        withdrawApprovals[index][msg.sender] = true;
+        request.approvalsCount++;
     }
 
     // -------------------------------------------------

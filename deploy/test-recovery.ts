@@ -46,9 +46,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     await executeAAWalletTransaction(GUARDIAN_ADDRESS_1, GUARDIAN_SK_1, initiateRecoveryTx, provider)
 
     console.log('recovery initiated. supporting recovery')
-    let supportRecoveryTx = await walletSignedByGuardian.populateTransaction.supportRecovery(
-        NEW_SIGNER_ADDRESS
-    )
+    let supportRecoveryTx = await walletSignedByGuardian.populateTransaction.supportRecovery()
     
     supportRecoveryTx = {
         ...supportRecoveryTx,
@@ -59,9 +57,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     await executeAAWalletTransaction(GUARDIAN_ADDRESS_2, GUARDIAN_SK_2, supportRecoveryTx, provider)
 
     console.log('recovery supported. executing recovery')
-    let executeRecoveryTx = await walletSignedByGuardian.populateTransaction.executeRecovery(
-        NEW_SIGNER_ADDRESS
-    )
+    let executeRecoveryTx = await walletSignedByGuardian.populateTransaction.executeRecovery()
 
     executeRecoveryTx = {
         ...executeRecoveryTx,
