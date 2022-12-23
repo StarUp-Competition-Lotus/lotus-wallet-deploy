@@ -70,7 +70,7 @@ contract AAWallet is IAccount, IERC1271 {
             msg.sender == BOOTLOADER_FORMAL_ADDRESS ||
                 msg.sender == signingAddress ||
                 msg.sender == address(this),
-            "Only guardian or bootloader can call this method"
+            "Only owner or bootloader can call this method"
         );
         _;
     }

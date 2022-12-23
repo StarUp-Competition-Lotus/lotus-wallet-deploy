@@ -37,33 +37,17 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         NEW_SIGNER_ADDRESS
     )
 
-    initiateRecoveryTx = {
-        ...initiateRecoveryTx,
-        to: WALLET_ADDRESS,
-        from: GUARDIAN_ADDRESS_1
-    }
-
     await executeAAWalletTransaction(GUARDIAN_ADDRESS_1, GUARDIAN_SK_1, initiateRecoveryTx, provider)
 
     console.log('recovery initiated. supporting recovery')
     let supportRecoveryTx = await walletSignedByGuardian.populateTransaction.supportRecovery()
     
-    supportRecoveryTx = {
-        ...supportRecoveryTx,
-        to: WALLET_ADDRESS,
-        from: GUARDIAN_ADDRESS_2
-    }
 
     await executeAAWalletTransaction(GUARDIAN_ADDRESS_2, GUARDIAN_SK_2, supportRecoveryTx, provider)
 
     console.log('recovery supported. executing recovery')
     let executeRecoveryTx = await walletSignedByGuardian.populateTransaction.executeRecovery()
 
-    executeRecoveryTx = {
-        ...executeRecoveryTx,
-        to: WALLET_ADDRESS,
-        from: GUARDIAN_ADDRESS_2
-    }
 
     await executeAAWalletTransaction(GUARDIAN_ADDRESS_2, GUARDIAN_SK_2, executeRecoveryTx, provider)
     console.log('recovery executed. checking whether new sk works:')

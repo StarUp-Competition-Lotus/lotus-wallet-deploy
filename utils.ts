@@ -5,16 +5,19 @@ export const executeAAWalletTransaction = async (
     walletAddress: string,
     walletSigningKey: string,
     tx: ethers.ethers.PopulatedTransaction,
-    provider: Provider,
+    provider: Provider
 ) => {
-    const signingAccount = new Wallet(walletSigningKey).connect(provider)
-
-    let gasLimit = await provider.estimateGas(tx)
-    let gasPrice = await provider.getGasPrice()
-
-    tx = {
+    let modifiedTx = {
         ...tx,
         from: walletAddress,
+    }
+    const signingAccount = new Wallet(walletSigningKey).connect(provider)
+
+    let gasLimit = await provider.estimateGas(modifiedTx)
+    let gasPrice = await provider.getGasPrice()
+
+    modifiedTx = {
+        ...modifiedTx,
         gasLimit: gasLimit,
         gasPrice: gasPrice,
         chainId: (await provider.getNetwork()).chainId,
@@ -25,7 +28,7 @@ export const executeAAWalletTransaction = async (
         } as types.Eip712Meta,
         value: ethers.BigNumber.from(0),
     }
-    const signedTxHash = EIP712Signer.getSignedDigest(tx)
+    const signedTxHash = EIP712Signer.getSignedDigest(modifiedTx)
 
     const signature = ethers.utils.concat([
         // Note, that `signMessage` wouldn't work here, since we don't want
@@ -33,12 +36,12 @@ export const executeAAWalletTransaction = async (
         ethers.utils.joinSignature(signingAccount._signingKey().signDigest(signedTxHash)),
     ])
 
-    tx.customData = {
-        ...tx.customData,
+    modifiedTx.customData = {
+        ...modifiedTx.customData,
         customSignature: signature,
     }
 
-    const executeTx = await provider.sendTransaction(utils.serialize(tx))
+    const executeTx = await provider.sendTransaction(utils.serialize(modifiedTx))
     await executeTx.wait(6)
 }
 
