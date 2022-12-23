@@ -5,16 +5,11 @@ export const executeAAWalletTransaction = async (
     walletAddress: string,
     walletSigningKey: string,
     tx: ethers.ethers.PopulatedTransaction,
-    provider: Provider
+    provider: Provider,
 ) => {
     const signingAccount = new Wallet(walletSigningKey).connect(provider)
 
-    let gasLimit
-    try {
-        gasLimit = await provider.estimateGas(tx)
-    } catch {
-        gasLimit = ethers.BigNumber.from("500000000")
-    }
+    let gasLimit = await provider.estimateGas(tx)
     let gasPrice = await provider.getGasPrice()
 
     tx = {
