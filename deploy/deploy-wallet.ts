@@ -40,11 +40,11 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     await (
         await userAccount.sendTransaction({
             to: walletAddress,
-            value: ethers.utils.parseEther("0.002"),
+            value: ethers.utils.parseEther("0.01"),
         })
     ).wait()
 
-    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"\nWALLET_SIGNING_ADDRESS="${signingAddress}"`, { flag: 'a+' }, );
+    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"\nWALLET_SIGNING_ADDRESS="${signingAddress}\n`, { flag: 'a+' }, );
 
     const balance = await provider.getBalance(walletAddress)
     console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")

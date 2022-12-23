@@ -10,7 +10,7 @@ const GUARDIAN_ADDRESS_1 = process.env.GUARDIAN_ADDRESS_1 as string
 const GUARDIAN_ADDRESS_2 = process.env.GUARDIAN_ADDRESS_2 as string
 const GUARDIAN_SK_1 = process.env.GUARDIAN_SK_1 as string
 const GUARDIAN_SK_2 = process.env.GUARDIAN_SK_2 as string
-const MY_ACCOUNT = process.env.MY_ACCOUNT as string
+const MY_ACCOUNT = "0x5FcF81463a2A63c10F51c4F9D55Fb7403759C8B9"
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
@@ -26,21 +26,19 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     // check balance
     const userBalance = await getBalance(userAccount.address, provider)
     console.log("userBalance :", userBalance)
-    if (userBalance < 0.01) return
+    if (userBalance < 0.01) {
+        console.log("Not enough funds from user balance")
+        return
+    }
 
-    // adding funds to signing account
-    console.log("Adding funds to signing account...")
-    await (
-        await userAccount.sendTransaction({
-            to: walletSigningAccount.address,
-            value: ethers.utils.parseEther("0.002"),
-        })
-    ).wait()
 
     // check balance
     const walletBalance = await getBalance(wallet.address, provider)
     console.log("walletBalance :", walletBalance)
-    if (walletBalance < 0.001) return
+    if (walletBalance < 0.0015) {
+        console.log("Not enough wallet balance")
+        return
+    }
 
     // add guardians
     console.log("adding guardians...")
@@ -51,8 +49,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const guardians = await wallet.getGuardians()
     console.log("Guardians: ", guardians)
 
-    // create a withdrawal request
-    console.log("creating withdrawal request...")
+    // create a withdraw request
+    console.log("creating withdraw request...")
     const createWithdrawRequestTx = await wallet.populateTransaction.createWithdrawRequest(
         ethers.utils.parseUnits((0.001).toString(), "ether"),
         MY_ACCOUNT
@@ -94,11 +92,12 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     )
     console.log("guardians finish approving requests")
 
+    //owner execute withdraw
+
     let myAccBalance = await getBalance(MY_ACCOUNT, provider)
     console.log("myAccBalance :", myAccBalance)
 
-    //owner execute withdrawal
-    console.log("owner executing withdrawal...")
+    console.log("owner executing withdraw...")
     const executeWithdrawRequestTx = await wallet.populateTransaction.executeWithdrawRequest(0)
     await executeAAWalletTransaction(
         WALLET_ADDRESS,
@@ -110,8 +109,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     myAccBalance = await getBalance(MY_ACCOUNT, provider)
     console.log("myAccBalance :", myAccBalance)
 
-    // create another withdrawal request
-    console.log("creating another withdrawal request...")
+    // create another withdraw request
+    console.log("creating another withdraw request...")
     const createWithdrawRequestTx2 = await wallet.populateTransaction.createWithdrawRequest(
         ethers.utils.parseUnits((0.001).toString(), "ether"),
         MY_ACCOUNT
@@ -132,5 +131,5 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         cancelWithdrawRequestTx,
         provider
     )
-    console.log("Success");
+    console.log("Success")
 }
