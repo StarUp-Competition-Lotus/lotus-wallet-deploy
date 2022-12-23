@@ -6,3 +6,5 @@ yarn hardhat compile
 yarn hardhat deploy-zksync --script deploy-factory.ts 
 yarn hardhat deploy-zksync --script deploy-wallet.ts
 yarn hardhat deploy-zksync --script deploy-guardians.ts
+yarn hardhat deploy-zksync --script deploy-new-signer.ts
+yarn hardhat deploy-zksync --script test-recovery.ts
