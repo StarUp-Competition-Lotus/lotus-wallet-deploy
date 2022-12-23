@@ -8,7 +8,7 @@ import { join } from 'path'
 const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS as string
 const PRIVATE_KEY = process.env.PRIVATE_KEY as string
 
-export default async function (hre: HardhatRuntimeEnvironment) {
+export default async function deployWallet (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
     const userAccount = new Wallet(PRIVATE_KEY).connect(provider)
     const factoryArtifact = await hre.artifacts.readArtifact("WalletFactory")
@@ -44,7 +44,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
         })
     ).wait()
 
-    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"\nWALLET_SIGNING_ADDRESS="${signingAddress}\n`, { flag: 'a+' }, );
+    writeFileSync(join(__dirname, '..', '.env'), `WALLET_ADDRESS="${walletAddress}"\nWALLET_SIGNING_KEY="${signingKey}"\nWALLET_SIGNING_ADDRESS="${signingAddress}"\n`, { flag: 'a+' }, );
 
     const balance = await provider.getBalance(walletAddress)
     console.log("Wallet Balance :", ethers.utils.formatEther(balance.toString()), "ETH")
