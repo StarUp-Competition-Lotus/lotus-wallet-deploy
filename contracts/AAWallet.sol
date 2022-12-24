@@ -20,33 +20,38 @@ contract AAWallet is IAccount, IERC1271 {
 
     // EVENTS
 
-    event RecoveryListed(
+    event GuardianAdded(address indexed walletAddr, address indexed guardian);
+    event GuardianRemoved(address indexed walletAddr, address indexed guardian);
+
+    event RecoveryInitiated(
+        address indexed walletAddr,
+        uint256 indexed recoverCycle,
+        address newSigningAddress,
+        address[] requiredGuardians,
+        address initiator
+    );
+    event RecoverySupported(
         address indexed walletAddr,
         uint256 indexed recoverIndex,
-        address newSigningAddress,
-        address[] guardiansSupported
+        address guardianSupported
     );
     event RecoveryCanceled(address indexed walletAddr, uint256 indexed recoverIndex);
-    event RecoveryExecuted(
-        address indexed walletAddr,
-        uint256 indexed recoverIndex,
-        address newSigningAddress
-    );
+    event RecoveryExecuted(address indexed walletAddr, uint256 indexed recoverIndex);
 
-    event WithdrawRequestListed(
+    event WithdrawRequestCreated(
         address indexed walletAddr,
         uint256 indexed withdrawIndex,
         address receiver,
         uint256 amount,
-        address[] guardiansApproved
+        address[] requiredGuardians
     );
-    event WithdrawRequestCanceled(address indexed walletAddr, uint256 indexed withdrawIndex);
-    event WithdrawRequestExecuted(
+    event WithdrawRequestApproved(
         address indexed walletAddr,
         uint256 indexed withdrawIndex,
-        address receiver,
-        uint256 amount
+        address guardianApproved
     );
+    event WithdrawRequestCanceled(address indexed walletAddr, uint256 indexed withdrawIndex);
+    event WithdrawRequestExecuted(address indexed walletAddr, uint256 indexed withdrawIndex);
 
     // ---------------------------------------------
 
@@ -61,7 +66,8 @@ contract AAWallet is IAccount, IERC1271 {
     struct Recovery {
         address newSigningAddress;
         mapping(address => bool) recoverySupports;
-        address[] supportedGuardians;
+        mapping(address => bool) requiredGuardiansMapping;
+        address[] requiredGuardians;
     }
     bool private inRecovery;
     uint256 private recoveryCycle;
@@ -72,7 +78,8 @@ contract AAWallet is IAccount, IERC1271 {
         address receiver;
         uint256 amount;
         mapping(address => bool) approvals;
-        address[] approvedGuardians;
+        mapping(address => bool) requiredGuardiansMapping;
+        address[] requiredGuardians;
         bool isActive;
     }
     mapping(uint256 => WithdrawRequest) private withdrawRequests;
@@ -86,11 +93,6 @@ contract AAWallet is IAccount, IERC1271 {
 
     modifier onlyBootloader() {
         require(msg.sender == BOOTLOADER_FORMAL_ADDRESS, "Only bootloader can call this method");
-        _;
-    }
-
-    modifier onlyGuardian() {
-        require(isGuardian[msg.sender], "Only guardian can call this method");
         _;
     }
 
@@ -243,47 +245,50 @@ contract AAWallet is IAccount, IERC1271 {
         );
         guardians.push(_guardian);
         isGuardian[_guardian] = true;
+        emit GuardianAdded(address(this), _guardian);
     }
 
     function removeGuardian(uint256 index) external ownerOrWallet {
         require(index < guardians.length);
+        address removedGuardian = guardians[index];
         for (uint256 i = index; i < guardians.length; i++) {
             guardians[i] = guardians[i + 1];
         }
         guardians.pop();
         delete (guardians[index]);
+        emit GuardianRemoved(address(this), removedGuardian);
     }
 
     // -------------------------------------------------
 
     // SOCIAL RECOVERY FUNCTIONS
 
-    function initiateRecovery(address _newSigningAddress) external onlyGuardian notInRecovery {
+    function initiateRecovery(address _newSigningAddress) external notInRecovery {
+        require(isGuardian[msg.sender], "Only guardian can call this method");
         recoveryCycle++;
         Recovery storage newRecovery = recoveryRounds[recoveryCycle];
         newRecovery.newSigningAddress = _newSigningAddress;
         newRecovery.recoverySupports[msg.sender] = true;
-        newRecovery.supportedGuardians.push(msg.sender);
+        for (uint256 i = 0; i < guardians.length; i++) {
+            newRecovery.requiredGuardiansMapping[guardians[i]] = true;
+        }
+        newRecovery.requiredGuardians = guardians;
         inRecovery = true;
-        emit RecoveryListed(
+        emit RecoveryInitiated(
             address(this),
             recoveryCycle,
             _newSigningAddress,
-            newRecovery.supportedGuardians
+            guardians,
+            msg.sender
         );
     }
 
-    function supportRecovery() external onlyGuardian onlyInRecovery {
+    function supportRecovery() external onlyInRecovery {
         Recovery storage recovery = recoveryRounds[recoveryCycle];
+        require(recovery.requiredGuardiansMapping[msg.sender], "not a required guardian");
         require(!recovery.recoverySupports[msg.sender], "already support this recovery");
         recovery.recoverySupports[msg.sender] = true;
-        recovery.supportedGuardians.push(msg.sender);
-        emit RecoveryListed(
-            address(this),
-            recoveryCycle,
-            recovery.newSigningAddress,
-            recovery.supportedGuardians
-        );
+        emit RecoverySupported(address(this), recoveryCycle, msg.sender);
     }
 
     function cancelRecovery() external ownerOrWallet onlyInRecovery {
@@ -291,14 +296,18 @@ contract AAWallet is IAccount, IERC1271 {
         emit RecoveryCanceled(address(this), recoveryCycle);
     }
 
-    function executeRecovery() external onlyGuardian onlyInRecovery {
+    function executeRecovery() external onlyInRecovery {
         Recovery storage recovery = recoveryRounds[recoveryCycle];
-        for (uint i = 0; i < guardians.length; i++) {
-            require(recovery.recoverySupports[guardians[i]], "all guardians must support recovery");
+        require(recovery.requiredGuardiansMapping[msg.sender], "not a required guardian");
+        for (uint i = 0; i < recovery.requiredGuardians.length; i++) {
+            require(
+                recovery.recoverySupports[recovery.requiredGuardians[i]],
+                "all guardians must support recovery"
+            );
         }
         signingAddress = recovery.newSigningAddress;
         inRecovery = false;
-        emit RecoveryExecuted(address(this), recoveryCycle, signingAddress);
+        emit RecoveryExecuted(address(this), recoveryCycle);
     }
 
     // VAULT FUNCTIONS
@@ -309,29 +318,28 @@ contract AAWallet is IAccount, IERC1271 {
         newRequest.amount = _amount;
         newRequest.receiver = _receiver;
         newRequest.isActive = true;
+        for (uint256 i = 0; i < guardians.length; i++) {
+            newRequest.requiredGuardiansMapping[guardians[i]] = true;
+        }
+        newRequest.requiredGuardians = guardians;
         withdrawRequestsCount++;
-        emit WithdrawRequestListed(
+        emit WithdrawRequestCreated(
             address(this),
             withdrawRequestsCount,
             _receiver,
             _amount,
-            newRequest.approvedGuardians
+            guardians
         );
     }
 
-    function approveWithdrawRequest(uint256 index) external onlyGuardian {
+    function approveWithdrawRequest(uint256 index) external {
         require(index <= withdrawRequestsCount);
         WithdrawRequest storage request = withdrawRequests[index];
-        require(request.isActive && !request.approvals[msg.sender]);
+        require(request.requiredGuardiansMapping[msg.sender], "Not a required guardian");
+        require(request.isActive, "Request is not active");
+        require(!request.approvals[msg.sender], "Already approved this request");
         request.approvals[msg.sender] = true;
-        request.approvedGuardians.push(msg.sender);
-        emit WithdrawRequestListed(
-            address(this),
-            withdrawRequestsCount,
-            request.receiver,
-            request.amount,
-            request.approvedGuardians
-        );
+        emit WithdrawRequestApproved(address(this), withdrawRequestsCount, msg.sender);
     }
 
     function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
@@ -346,13 +354,16 @@ contract AAWallet is IAccount, IERC1271 {
         require(withdrawRequests[index].isActive);
         WithdrawRequest storage request = withdrawRequests[index];
         require(request.amount <= address(this).balance, "Insufficient Balance");
-        for (uint i = 0; i < guardians.length; i++) {
-            require(request.approvals[guardians[i]], "all guardians must approve withdraw");
+        for (uint i = 0; i < request.requiredGuardians.length; i++) {
+            require(
+                request.approvals[request.requiredGuardians[i]],
+                "all guardians must approve withdraw"
+            );
         }
         (bool success, ) = payable(request.receiver).call{value: request.amount}("");
         require(success, "Transfer failed");
         request.isActive = false;
-        emit WithdrawRequestExecuted(address(this), index, request.receiver, request.amount);
+        emit WithdrawRequestExecuted(address(this), index);
     }
 
     // -------------------------------------------------
