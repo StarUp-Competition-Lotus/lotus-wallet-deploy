@@ -20,7 +20,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const signingAccount1 = Wallet.createRandom()
     const { privateKey: signingKey1, address: signingAddress1 } = signingAccount1
 
-    const tx1 = await walletFactory.deployAccount(salt, signingAddress1)
+    const tx1 = await walletFactory.deployWallet(salt, signingAddress1)
     await tx1.wait()
 
     // Getting the address of the deployed contract
@@ -53,7 +53,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const signingAccount2 = Wallet.createRandom()
     const { privateKey: signingKey2, address: signingAddress2 } = signingAccount2
 
-    const tx2 = await walletFactory.deployAccount(salt, signingAddress2)
+    const tx2 = await walletFactory.deployWallet(salt, signingAddress2)
     await tx2.wait()
 
     const guardianAddr2 = utils.create2Address(

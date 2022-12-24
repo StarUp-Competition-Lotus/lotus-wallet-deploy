@@ -19,12 +19,36 @@ contract AAWallet is IAccount, IERC1271 {
     using TransactionHelper for Transaction;
 
     // EVENTS
-    // event GuardianAdded(address guardian);
-    // event GuardianRemoved(address guardian);
-    // event WithdrawRequestCreated(address receiver, uint256 amount);
-    // event WithdrawRequestApproved(address guardian);
-    // event WithdrawRequestExecuted(address receiver, uint256 amount);
-    // event WithdrawRequestCanceled(address receiver, uint256 amount);
+
+    event RecoveryListed(
+        address indexed walletAddr,
+        uint256 indexed recoverIndex,
+        address newSigningAddress,
+        address[] guardiansSupported
+    );
+    event RecoveryCanceled(address indexed walletAddr, uint256 indexed recoverIndex);
+    event RecoveryExecuted(
+        address indexed walletAddr,
+        uint256 indexed recoverIndex,
+        address newSigningAddress
+    );
+
+    event WithdrawRequestListed(
+        address indexed walletAddr,
+        uint256 indexed withdrawIndex,
+        address receiver,
+        uint256 amount,
+        address[] guardiansApproved
+    );
+    event WithdrawRequestCanceled(address indexed walletAddr, uint256 indexed withdrawIndex);
+    event WithdrawRequestExecuted(
+        address indexed walletAddr,
+        uint256 indexed withdrawIndex,
+        address receiver,
+        uint256 amount
+    );
+
+    // ---------------------------------------------
 
     // VARIABLES
 
@@ -36,7 +60,8 @@ contract AAWallet is IAccount, IERC1271 {
     // social recovery variables
     struct Recovery {
         address newSigningAddress;
-        mapping(address => bool) approvals;
+        mapping(address => bool) recoverySupports;
+        address[] supportedGuardians;
     }
     bool private inRecovery;
     uint256 private recoveryCycle;
@@ -46,14 +71,18 @@ contract AAWallet is IAccount, IERC1271 {
     struct WithdrawRequest {
         address receiver;
         uint256 amount;
-        uint256 approvalsCount;
+        mapping(address => bool) approvals;
+        address[] approvedGuardians;
+        bool isActive;
     }
     mapping(uint256 => WithdrawRequest) private withdrawRequests;
     uint256 private withdrawRequestsCount;
-    mapping(uint256 => bool) activeWithdrawRequestsIndexes;
-    mapping(uint256 => mapping(address => bool)) private withdrawApprovals;
 
     bytes4 constant EIP1271_SUCCESS_RETURN_VALUE = 0x1626ba7e;
+
+    // ---------------------------------------------
+
+    // MODIFIERS
 
     modifier onlyBootloader() {
         require(msg.sender == BOOTLOADER_FORMAL_ADDRESS, "Only bootloader can call this method");
@@ -85,10 +114,15 @@ contract AAWallet is IAccount, IERC1271 {
         _;
     }
 
+    // ---------------------------------------------
+
+    // CONSTRUCTOR
+
     constructor(address _signingAddress) {
-        // should not pass secret as params for security reasons
         signingAddress = _signingAddress;
     }
+
+    // ---------------------------------------------
 
     // AA FUNCTIONS
 
@@ -166,7 +200,6 @@ contract AAWallet is IAccount, IERC1271 {
         bytes32 _hash,
         bytes calldata _signature
     ) public view override returns (bytes4) {
-
         require(_signature.length == 65, "Incorect Length");
 
         address RecoveredAddr = ECDSA.recover(_hash, _signature[0:65]);
@@ -224,36 +257,48 @@ contract AAWallet is IAccount, IERC1271 {
     // -------------------------------------------------
 
     // SOCIAL RECOVERY FUNCTIONS
-    // initiate social recovery
-    function initiateRecovery(address _newSigningAddress) onlyGuardian notInRecovery external {
+
+    function initiateRecovery(address _newSigningAddress) external onlyGuardian notInRecovery {
         recoveryCycle++;
-        Recovery storage newRocovery = recoveryRounds[recoveryCycle];
-        newRocovery.newSigningAddress = _newSigningAddress;
-        newRocovery.approvals[msg.sender] = true;
+        Recovery storage newRecovery = recoveryRounds[recoveryCycle];
+        newRecovery.newSigningAddress = _newSigningAddress;
+        newRecovery.recoverySupports[msg.sender] = true;
+        newRecovery.supportedGuardians.push(msg.sender);
         inRecovery = true;
+        emit RecoveryListed(
+            address(this),
+            recoveryCycle,
+            _newSigningAddress,
+            newRecovery.supportedGuardians
+        );
     }
 
     function supportRecovery() external onlyGuardian onlyInRecovery {
         Recovery storage recovery = recoveryRounds[recoveryCycle];
-        require(!recovery.approvals[msg.sender], "duplicate guardian used in recovery");
-        recovery.approvals[msg.sender] = true;
+        require(!recovery.recoverySupports[msg.sender], "already support this recovery");
+        recovery.recoverySupports[msg.sender] = true;
+        recovery.supportedGuardians.push(msg.sender);
+        emit RecoveryListed(
+            address(this),
+            recoveryCycle,
+            recovery.newSigningAddress,
+            recovery.supportedGuardians
+        );
     }
 
     function cancelRecovery() external ownerOrWallet onlyInRecovery {
-        // delete recoveryRounds[recoveryCycle];
         inRecovery = false;
+        emit RecoveryCanceled(address(this), recoveryCycle);
     }
 
     function executeRecovery() external onlyGuardian onlyInRecovery {
+        Recovery storage recovery = recoveryRounds[recoveryCycle];
         for (uint i = 0; i < guardians.length; i++) {
-            // cache recovery struct in memory
-            Recovery storage recovery = recoveryRounds[recoveryCycle];
-            require(recovery.approvals[guardians[i]], "all guardians must support recovery");
+            require(recovery.recoverySupports[guardians[i]], "all guardians must support recovery");
         }
-
+        signingAddress = recovery.newSigningAddress;
         inRecovery = false;
-        signingAddress = recoveryRounds[recoveryCycle].newSigningAddress;
-        // delete recoveryRounds[recoveryCycle];
+        emit RecoveryExecuted(address(this), recoveryCycle, signingAddress);
     }
 
     // VAULT FUNCTIONS
@@ -263,59 +308,71 @@ contract AAWallet is IAccount, IERC1271 {
         WithdrawRequest storage newRequest = withdrawRequests[withdrawRequestsCount];
         newRequest.amount = _amount;
         newRequest.receiver = _receiver;
-        activeWithdrawRequestsIndexes[withdrawRequestsCount] = true;
+        newRequest.isActive = true;
         withdrawRequestsCount++;
-    }
-
-    function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index < withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
-        delete (withdrawRequests[index]);
-        activeWithdrawRequestsIndexes[index] = false;
-    }
-
-    function executeWithdrawRequest(uint256 index) external ownerOrWallet {
-        require(index <= withdrawRequestsCount && activeWithdrawRequestsIndexes[index]);
-        WithdrawRequest storage request = withdrawRequests[index];
-        require(request.amount <= address(this).balance, "Insufficient Balance");
-        require(request.approvalsCount >= guardians.length, "Not enough approvals");
-        (bool success, ) = payable(request.receiver).call{value: request.amount}("");
-        require(success, "Transfer failed");
-        activeWithdrawRequestsIndexes[index] = false;
+        emit WithdrawRequestListed(
+            address(this),
+            withdrawRequestsCount,
+            _receiver,
+            _amount,
+            newRequest.approvedGuardians
+        );
     }
 
     function approveWithdrawRequest(uint256 index) external onlyGuardian {
-        require(
-            index <= withdrawRequestsCount &&
-                activeWithdrawRequestsIndexes[index] &&
-                !withdrawApprovals[index][msg.sender]
-        );
+        require(index <= withdrawRequestsCount);
         WithdrawRequest storage request = withdrawRequests[index];
-        withdrawApprovals[index][msg.sender] = true;
-        request.approvalsCount++;
+        require(request.isActive && !request.approvals[msg.sender]);
+        request.approvals[msg.sender] = true;
+        request.approvedGuardians.push(msg.sender);
+        emit WithdrawRequestListed(
+            address(this),
+            withdrawRequestsCount,
+            request.receiver,
+            request.amount,
+            request.approvedGuardians
+        );
+    }
+
+    function cancelWithdrawRequest(uint256 index) external ownerOrWallet {
+        require(index <= withdrawRequestsCount);
+        require(withdrawRequests[index].isActive);
+        withdrawRequests[index].isActive = false;
+        emit WithdrawRequestCanceled(address(this), index);
+    }
+
+    function executeWithdrawRequest(uint256 index) external ownerOrWallet {
+        require(index <= withdrawRequestsCount);
+        require(withdrawRequests[index].isActive);
+        WithdrawRequest storage request = withdrawRequests[index];
+        require(request.amount <= address(this).balance, "Insufficient Balance");
+        for (uint i = 0; i < guardians.length; i++) {
+            require(request.approvals[guardians[i]], "all guardians must approve withdraw");
+        }
+        (bool success, ) = payable(request.receiver).call{value: request.amount}("");
+        require(success, "Transfer failed");
+        request.isActive = false;
+        emit WithdrawRequestExecuted(address(this), index, request.receiver, request.amount);
     }
 
     // -------------------------------------------------
+
     // GETTER FUNCTIONS
+
     function getSigningAddress() public view ownerOrWallet returns (address) {
         return signingAddress;
     }
 
     function getGuardians() public view ownerOrWallet returns (address[] memory) {
-        uint256 zeroAddressCount;
-        for (uint256 i = 0; i < guardians.length; i++) {
-            if (guardians[i] == address(0)) {
-                zeroAddressCount++;
-            }
-        }
-        uint256 index = 0;
-        address[] memory result = new address[](guardians.length - zeroAddressCount);
-        for (uint256 i = 0; i < guardians.length; i++) {
-            if (guardians[i] != address(0)) {
-                result[index] = guardians[i];
-                index++;
-            }
-        }
-        return result;
+        return guardians;
+    }
+
+    function getRecoveryState() public view ownerOrWallet returns (bool) {
+        return inRecovery;
+    }
+
+    function getRecoveryCycle() public view ownerOrWallet returns (uint256) {
+        return recoveryCycle;
     }
 
     function getWithdrawRequestsCount() public view ownerOrWallet returns (uint256) {
