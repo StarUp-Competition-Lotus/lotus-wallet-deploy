@@ -4,6 +4,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types"
 import { executeAAWalletTransaction } from "../utils"
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS as string
 const WALLET_SIGNING_KEY = process.env.WALLET_SIGNING_KEY as string
+const GUARDIAN_ADDRESS_1 = process.env.GUARDIAN_ADDRESS_2 as string
 
 export default async function (hre: HardhatRuntimeEnvironment) {
     const provider = new Provider(hre.config.zkSyncDeploy.zkSyncNetwork)
@@ -13,7 +14,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     const wallet = new ethers.Contract(WALLET_ADDRESS, walletArtifact.abi, signingAccount)
 
     const addGuardianTx = await wallet.populateTransaction.addGuardian(
-        "0xb607A500574fE29afb0d0681f1dC3E82f79f4877"
+        GUARDIAN_ADDRESS_1
     )
 
     const removeGuardianTx = await wallet.populateTransaction.removeGuardian(0)

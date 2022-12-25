@@ -251,11 +251,11 @@ contract AAWallet is IAccount, IERC1271 {
     function removeGuardian(uint256 index) external ownerOrWallet {
         require(index < guardians.length);
         address removedGuardian = guardians[index];
-        for (uint256 i = index; i < guardians.length; i++) {
+        for (uint256 i = index; i < guardians.length - 1; i++) {
             guardians[i] = guardians[i + 1];
         }
+        delete isGuardian[removedGuardian];
         guardians.pop();
-        delete (guardians[index]);
         emit GuardianRemoved(address(this), removedGuardian);
     }
 
