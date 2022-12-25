@@ -7,14 +7,16 @@ import "@matterlabs/zksync-contracts/l2/system-contracts/SystemContractsCaller.s
 contract WalletFactory {
     bytes32 public aaBytecodeHash;
 
+    event WalletCreated(address indexed walletAddress);
+
     constructor(bytes32 _aaBytecodeHash) {
         aaBytecodeHash = _aaBytecodeHash;
     }
 
-    function deployAccount(
+    function deployWallet(
         bytes32 salt,
         address signingAddress
-    ) external returns (address accountAddress) {
+    ) external returns (address walletAddress) {
         bytes memory returnData = SystemContractsCaller.systemCall(
             uint32(gasleft()),
             address(DEPLOYER_SYSTEM_CONTRACT),
@@ -25,6 +27,7 @@ contract WalletFactory {
             )
         );
 
-        (accountAddress, ) = abi.decode(returnData, (address, bytes));
+        (walletAddress, ) = abi.decode(returnData, (address, bytes));
+        emit WalletCreated(walletAddress);
     }
 }

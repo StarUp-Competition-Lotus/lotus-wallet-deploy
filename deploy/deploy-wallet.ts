@@ -22,7 +22,7 @@ export default async function deployWallet (hre: HardhatRuntimeEnvironment) {
 
     const salt = ethers.constants.HashZero
 
-    const tx = await walletFactory.deployAccount(salt, signingAddress)
+    const tx = await walletFactory.deployWallet(salt, signingAddress)
     await tx.wait()
 
     // Getting the address of the deployed contract

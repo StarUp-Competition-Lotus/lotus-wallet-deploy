@@ -1,6 +1,6 @@
 #! /bin/sh
 rm .env
-echo "PRIVATE_KEY=\"6cb6d63de37d2399f6495bbbd60ae6e2530d2de00f11802374865754b60b1609\"" >> .env
+echo "PRIVATE_KEY=\"8ed772c06d5241f5b82ee5b950dabc21c11916d4fdcd6053d3b0ff864c00c9c0\"" >> .env
 
 yarn hardhat compile
 yarn hardhat deploy-zksync --script deploy-factory.ts 
