@@ -264,6 +264,7 @@ contract AAWallet is IAccount, IERC1271 {
     // SOCIAL RECOVERY FUNCTIONS
 
     function initiateRecovery(address _newSigningAddress) external notInRecovery {
+        require(guardians.length >= 2, "There must be at least 2 guardians");
         require(isGuardian[msg.sender], "Only guardian can call this method");
         recoveryCycle++;
         Recovery storage newRecovery = recoveryRounds[recoveryCycle];
@@ -313,6 +314,7 @@ contract AAWallet is IAccount, IERC1271 {
     // VAULT FUNCTIONS
 
     function createWithdrawRequest(uint256 _amount, address _receiver) external ownerOrWallet {
+        require(guardians.length >= 2, "There must be at least 2 guardians");
         require(_amount > 0 && _amount <= address(this).balance, "Invalid Amount");
         WithdrawRequest storage newRequest = withdrawRequests[withdrawRequestsCount];
         newRequest.amount = _amount;
