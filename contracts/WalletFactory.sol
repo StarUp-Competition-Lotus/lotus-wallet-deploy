@@ -7,7 +7,7 @@ import "@matterlabs/zksync-contracts/l2/system-contracts/SystemContractsCaller.s
 contract WalletFactory {
     bytes32 public aaBytecodeHash;
 
-    event WalletCreated(address indexed walletAddress);
+    event WalletCreated(address indexed walletAddress, address indexed signingAddress);
 
     constructor(bytes32 _aaBytecodeHash) {
         aaBytecodeHash = _aaBytecodeHash;
@@ -28,6 +28,6 @@ contract WalletFactory {
         );
 
         (walletAddress, ) = abi.decode(returnData, (address, bytes));
-        emit WalletCreated(walletAddress);
+        emit WalletCreated(walletAddress, signingAddress);
     }
 }
